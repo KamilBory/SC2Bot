@@ -88,7 +88,7 @@ async def defend_nexus(self):
 async def attack_known_enemy_structure(self):
     if len(self.enemy_structures) > 0:
         target = random.choice(self.enemy_structures)
-        for u in self.units(VOIDRAY).idle:
+        for u in self.units().idle:
             u.attack(target)
 
 
@@ -98,17 +98,13 @@ async def attack_known_enemy_unit(self):
         for u in self.units().idle:
             u.attack(target)
 
-async def do_nothing(self):
-    wait = random.randrange(7, 100) / 100
-    self.do_something_after = self.time + wait
-
 async def do_something(self):
-    print('Hejka')
+    #print('Hejka')
     if self.use_model:
         prediction = self.model.predict([self.flipped.reshape([-1, 176, 200, 3])])
         choice = np.argmax(prediction[0])
     else:
-        choice = random.randint(0,3)
+        choice = random.randint(0,2)
 
     try:
         await self.choices[choice]
@@ -116,7 +112,7 @@ async def do_something(self):
         print(str(e))
 
     #self.train_data.append([y, self.flipped])
-'''
+
 async def scout(self):
     self.expand_dis_dir = {}
 
@@ -126,53 +122,26 @@ async def scout(self):
 
     self.ordered_exp_distances = sorted(k for k in self.expand_dis_dir)
 
-    existing_ids = [unit.tag for unit in self.units]
-    to_be_removed = []
-    for noted_scout in self.scouts_and_spots:
-        if noted_scout not in existing_ids:
-            to_be_removed.append(noted_scout)
-
-    for scout in to_be_removed:
-        del self.scouts_and_spots[scout]
-
-    if len(self.units(ROBOTICSFACILITY).ready) == 0:
-        unit_type = PROBE
-        unit_limit = 1
+    if len(self.units(UnitTypeId.OBSERVER)) == 0:
+        if len(self.scouts_and_spots) == 0:
+            scout = self.units(UnitTypeId.PROBE).random
+            self.scouts_and_spots.append(scout)
     else:
-        unit_type = OBSERVER
-        unit_limit = 15
+        if len(self.scouts_and_spots) <= 4:
+            scout = self.units(UnitTypeId.OBSERVER).idle.random
+            self.scouts_and_spots.append(scout)
 
-    assign_scout = True
+    to_be_removed = []
+    existing_ids = [unit.tag for unit in self.units]
+    
+    for s in self.scouts_and_spots:
+        if s.tag not in existing_ids:
+            to_be_removed.append(s)
+          
+    for s in to_be_removed:
+        self.scouts_and_spots.remove(s)
 
-    if unit_type == PROBE:
-        for unit in self.units(PROBE):
-            if unit.tag in self.scouts_and_spots:
-                assign_scout = False
-
-    if assign_scout:
-        if len(self.units(unit_type).idle) > 0:
-            for obs in self.units(unit_type).idle[:unit_limit]:
-                if obs.tag not in self.scouts_and_spots:
-                    for dist in self.ordered_exp_distances:
-                        try:
-                            location = next(value for key, value in self.expand_dis_dir.items() if key == dist)
-                            # DICT {UNIT_ID:LOCATION}
-                            active_locations = [self.scouts_and_spots[k] for k in self.scouts_and_spots]
-
-                            if location not in active_locations:
-                                if unit_type == PROBE:
-                                    for unit in self.units(PROBE):
-                                        if unit.tag in self.scouts_and_spots:
-                                            continue
-
-                                await self.do(obs.move(location))
-                                self.scouts_and_spots[obs.tag] = location
-                                break
-                        except Exception as e:
-                            pass
-
-    for obs in self.units(unit_type):
-        if obs.tag in self.scouts_and_spots:
-            if obs in [probe for probe in self.units(PROBE)]:
-                await self.do(obs.move(self.random_location_variance(self.scouts_and_spots[obs.tag])))
-'''
+    for i in range(0, len(self.scouts_and_spots)):
+        print(i)
+        location = self.expand_dis_dir[i]
+        self.scouts_and_spots[i].move(location)

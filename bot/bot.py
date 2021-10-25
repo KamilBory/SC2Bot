@@ -34,15 +34,13 @@ class CompetitiveBot(BotAI):
         sc2.BotAI.__init__(self)
         self.do_something_after = 0
         self.use_model = False
-        #self.title = title
-        self.scouts_and_spots = {}
+        self.scouts_and_spots = []
         self.train_data = []
         self.isTime = False
 
         self.choices = {0: actions.attack_known_enemy_unit(self),
                         1: actions.attack_known_enemy_structure(self),
                         2: actions.defend_nexus(self),
-                        3: actions.do_nothing(self),
                         }
 
         '''if self.use_model:
@@ -63,7 +61,6 @@ class CompetitiveBot(BotAI):
     async def on_step(self, iteration):
         # Populate this function with whatever your bot should do!
         self.iteration = iteration
-        # self.time = (self.state.game_loop / 22.4)
         # Functions strictly for Protoss
         await self.distribute_workers()
 
@@ -83,17 +80,19 @@ class CompetitiveBot(BotAI):
         await protoss_action.expand(self)
 
         if self.time > 240.0:
-            isTime = True
+            self.isTime = True
 
         if self.time % 15 == 0:
-            await protoss_action.recruit(self, time)
+            #print('hej')
+            await protoss_action.recruit(self, self.isTime)
 
         #await actions.defend_nexus(self)
-
+        #print(self.time, '  ', self.do_something_after)
         if self.time > self.do_something_after:
             await actions.do_something(self)
+            self.do_something_after = self.time + random.uniform(5, 15)
         await actions.intel(self, HEADLESS)
-
+        await actions.scout(self)
 
 
         pass
