@@ -98,21 +98,6 @@ async def attack_known_enemy_unit(self):
         for u in self.units().idle:
             u.attack(target)
 
-async def do_something(self):
-    #print('Hejka')
-    if self.use_model:
-        prediction = self.model.predict([self.flipped.reshape([-1, 176, 200, 3])])
-        choice = np.argmax(prediction[0])
-    else:
-        choice = random.randint(0,2)
-
-    try:
-        await self.choices[choice]
-    except Exception as e:
-        print(str(e))
-
-    #self.train_data.append([y, self.flipped])
-
 async def scout(self):
     self.expand_dis_dir = {}
 
@@ -128,7 +113,7 @@ async def scout(self):
             self.scouts_and_spots.append(scout)
     else:
         if len(self.scouts_and_spots) <= 4:
-            scout = self.units(UnitTypeId.OBSERVER).idle.random
+            scout = self.units(UnitTypeId.OBSERVER).random
             self.scouts_and_spots.append(scout)
 
     to_be_removed = []
@@ -141,7 +126,74 @@ async def scout(self):
     for s in to_be_removed:
         self.scouts_and_spots.remove(s)
 
-    for i in range(0, len(self.scouts_and_spots)):
-        print(i)
+    for s in self.scouts_and_spots:
+        i = 0
         location = self.expand_dis_dir[i]
-        self.scouts_and_spots[i].move(location)
+        s.move(location)
+        i += 1
+
+async def move_towards_enemy(self):
+    pos = position.Point2(position.Pointlike((self.enemy_start_locations[0].x, self.enemy_start_locations[0].y)))
+    await helper_function(self, pos)
+
+async def move_towards_map_center(self):
+    pos = position.Point2(position.Pointlike((self.game_info.map_center.x, self.game_info.map_center.y)))
+    await helper_function(self, pos)
+
+async def move_towards_map_side_left(self):
+    pos = position.Point2(position.Pointlike((self.game_info.map_center.x - self.game_info.map_size.x / 4, self.game_info.map_center.y -  self.game_info.map_size.y / 4)))
+    await helper_function(self, pos)
+
+async def move_towards_map_side_right(self):
+    pos = position.Point2(position.Pointlike((self.game_info.map_center.x + self.game_info.map_size.x / 4, self.game_info.map_center.y +  self.game_info.map_size.y / 4)))
+    await helper_function(self, pos)
+
+async def helper_function(self, pos):
+    for u in self.units(UnitTypeId.ZEALOT):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.SENTRY):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.STALKER):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.ADEPT):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.HIGHTEMPLAR):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.DARKTEMPLAR):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.PHOENIX):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.ORACLE):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.TEMPEST):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.CARRIER):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.MOTHERSHIP):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.OBSERVER):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.WARPPRISM):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.IMMORTAL):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.COLOSSUS):
+        if u.is_idle:
+            u.attack(pos)
+    for u in self.units(UnitTypeId.DISRUPTOR):
+        if u.is_idle:
+            u.attack(pos)

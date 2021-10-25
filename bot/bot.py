@@ -38,14 +38,19 @@ class CompetitiveBot(BotAI):
         self.train_data = []
         self.isTime = False
 
-        self.choices = {0: actions.attack_known_enemy_unit(self),
-                        1: actions.attack_known_enemy_structure(self),
-                        2: actions.defend_nexus(self),
+        self.choices = {0: actions.attack_known_enemy_unit,
+                        1: actions.attack_known_enemy_structure,
+                        2: actions.defend_nexus,
+                        3: actions.scout,
+                        4: actions.move_towards_enemy,
+                        5: actions.move_towards_map_center,
+                        6: actions.move_towards_map_side_right,
+                        7: actions.move_towards_map_side_left,
                         }
 
-        '''if self.use_model:
+        if self.use_model:
            print("USING MODEL!")
-           self.model = keras.models.load_model("BasicCNN-30-epochs-0.0001-LR-4.2")'''
+           self.model = keras.models.load_model("BasicCNN-30-epochs-0.0001-LR-4.2")
 
     async def on_start(self):
         print("Game started")
@@ -83,16 +88,28 @@ class CompetitiveBot(BotAI):
             self.isTime = True
 
         if self.time % 15 == 0:
-            #print('hej')
             await protoss_action.recruit(self, self.isTime)
 
-        #await actions.defend_nexus(self)
-        #print(self.time, '  ', self.do_something_after)
-        if self.time > self.do_something_after:
-            await actions.do_something(self)
-            self.do_something_after = self.time + random.uniform(5, 15)
         await actions.intel(self, HEADLESS)
-        await actions.scout(self)
-
+        if self.time > self.do_something_after:
+            self.do_something_after = self.time + random.uniform(5, 15)
+            await self.do_something()
 
         pass
+
+    async def do_something(self):
+        if self.use_model:
+            prediction = self.model.predict([self.flipped.reshape([-1, 176, 200, 3])])
+            choice = np.argmax(prediction[0])
+        else:
+            choice = random.randint(0, 7)
+            print(choice)
+
+        try:
+            await self.choices[choice](self)
+        except Exception as e:
+            print(str(e))
+
+        y = np.zeros(8)
+        y[choice] = 1
+        self.train_data.append([y, self.flipped])
