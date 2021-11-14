@@ -94,7 +94,7 @@ async def attack_known_enemy_structure(self):
 
 async def attack_known_enemy_unit(self):
     if len(self.enemy_units) > 0:
-        target = self.enemy_units.closest_to(random.choice(self.units(UnitTypeId.NEXUS)))
+        target = self.enemy_units.random
         for u in self.units().idle:
             u.attack(target)
 

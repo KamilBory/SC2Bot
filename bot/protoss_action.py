@@ -13,15 +13,16 @@ import random
 # Buildings needed in greater numbers
     
 async def build_pylons(self):
-    nexus = self.townhalls.ready.random
-    x = random.uniform(1, 2) * self.enemy_start_locations[0][0]
-    y = random.uniform(1, 2) * self.enemy_start_locations[0][1]
-    build_pos = position.Point2(position.Pointlike((x,y)))
-    pos = nexus.position.towards(build_pos, random.uniform(8, 15))
-    if (self.supply_left < 4
-            and self.already_pending(UnitTypeId.PYLON) == 0
-            and self.can_afford(UnitTypeId.PYLON)):
-        await self.build(UnitTypeId.PYLON, near=pos)
+    if self.townhalls.ready.amount > 0:
+        nexus = self.townhalls.ready.random
+        x = random.uniform(-1, 2) * self.enemy_start_locations[0][0]
+        y = random.uniform(-1, 2) * self.enemy_start_locations[0][1]
+        build_pos = position.Point2(position.Pointlike((x,y)))
+        pos = nexus.position.towards(build_pos, random.uniform(8, 15))
+        if (self.supply_left < 4
+                and self.already_pending(UnitTypeId.PYLON) == 0
+                and self.can_afford(UnitTypeId.PYLON)):
+            await self.build(UnitTypeId.PYLON, near=pos)
 
 
 async def build_gateways(self):
@@ -155,11 +156,12 @@ async def build_forge(self):
 # Workers
 
 async def build_workers(self):
-    nexus = self.townhalls.ready.random
-    if (self.can_afford(UnitTypeId.PROBE)
-            and nexus.is_idle
-            and self.workers.amount <= self.townhalls.amount * 22):
-        nexus.train(UnitTypeId.PROBE)
+    if self.townhalls.ready.amount > 0:
+        nexus = self.townhalls.ready.random
+        if (self.can_afford(UnitTypeId.PROBE)
+                and nexus.is_idle
+                and self.workers.amount <= self.townhalls.amount * 22):
+            nexus.train(UnitTypeId.PROBE)
 
 # Gateway units
 
