@@ -41,6 +41,7 @@ ENEMY_AMOUNT = 0
 ENEMY_BUILDING = 0
 ENEMY_NEXUS = 0
 
+
 class CompetitiveBot(BotAI):
     NAME: str = "CompetitiveBot"
     """This bot's name"""
@@ -117,6 +118,7 @@ class CompetitiveBot(BotAI):
         await protoss_action.build_dark_shrine(self)
         await protoss_action.expand(self)
 
+        print(self.units().amount)
 
         if self.time > 240.0:
             self.isTime = True
@@ -229,3 +231,4 @@ class CompetitiveBot(BotAI):
 
         self.reward += move_penalty
         #print(reward)
+
