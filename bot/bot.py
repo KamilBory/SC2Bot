@@ -12,6 +12,7 @@ import numpy as np
 import cv2
 import time
 import math
+import pandas as pd
 from bot import protoss_action
 from bot import actions
 
@@ -41,6 +42,57 @@ ENEMY_AMOUNT = 0
 ENEMY_BUILDING = 0
 ENEMY_NEXUS = 0
 
+class QLearningTable:
+    def __init__(self, actions, learning_rate = 0.01, decay = 0.9):
+        self.actions = actions
+        self.learning_rate = learning_rate
+        self.decay = decay
+        self.QTable = pd.DataFrame(columns = self.actions, dtype = np.float64)
+
+    async def chooseAction(self, observation, e_greedy = 0.9):
+        await self.checkState(observation)
+        if np.random.uniform() < e_greedy:
+            state_action = self.QTable.loc[observation, :]
+            action = np.random.choice(state_action[state_action == np.max(state_action)].index)
+        else:
+            action = np.random.choice(self.actions)
+
+        if action == "attack_known_enemy_unit":
+            act = 0
+        elif action == "attack_known_enemy_structure":
+            act = 1
+        elif action == "defend_nexus":
+            act = 2
+        elif action == "scout":
+            act = 3
+        elif action == "move_towards_enemy":
+            act = 4
+        elif action == "move_towards_map_center":
+            act = 5
+        elif action == "move_towards_map_side_right":
+            act = 6
+        elif action == "move_towards_map_side_left":
+            act = 7
+
+        return act
+
+    async def learn(self, state, action, reward, s_):
+        await self.checkState(s_)
+        q_predict = self.QTable.loc[state, action]
+        if s_ != 'terminal':
+            q_target = reward + self.decay * self.QTable.loc[s_, :].max()
+        else:
+            q_target = reward
+
+        self.QTable.loc[state, action] += self.learning_rate * (q_target - q_predict)
+
+
+    async def checkState(self, state):
+        if state not in self.QTable.index:
+            self.QTable = self.QTable.append(pd.Series([0] * len(self.actions),
+                                                       index = self.QTable.columns,
+                                                       name = state))
+
 
 class CompetitiveBot(BotAI):
     NAME: str = "CompetitiveBot"
@@ -62,6 +114,8 @@ class CompetitiveBot(BotAI):
         self.scouts_and_spots = []
         self.train_data = []
         self.isTime = False
+        self.previous_action = None
+        self.previous_state = None
 
         self.choices = {0: actions.attack_known_enemy_unit,
                         1: actions.attack_known_enemy_structure,
@@ -73,18 +127,28 @@ class CompetitiveBot(BotAI):
                         7: actions.move_towards_map_side_left,
                         }
 
+        self.choicesQLearn = ["attack_known_enemy_unit",
+                              "attack_known_enemy_structure",
+                              "defend_nexus",
+                              "scout",
+                              "move_towards_enemy",
+                              "move_towards_map_center",
+                              "move_towards_map_side_right",
+                              "move_towards_map_side_left"
+                              ]
+
         self.reward = 0
+        self.visibleCount = 0
 
         self.q_table = {}
         self.unit_tab = []
+        self.unit_tab1 = []
+        self.QTable = QLearningTable(self.choicesQLearn)
 
         if self.use_model:
            print("USING MODEL!")
            self.model = keras.models.load_model("BasicCNN-30-epochs-0.0001-LR-4.2")
 
-        if start_q_table is None:
-            for i in range(0, 8):
-                self.q_table[i] = np.random.uniform(-5, 0)
 
     async def on_start(self):
         print("Game started")
@@ -103,6 +167,8 @@ class CompetitiveBot(BotAI):
         # Functions strictly for Protoss
         await self.distribute_workers()
 
+        await self.getUnits()
+
         await protoss_action.build_workers(self)
         await protoss_action.build_pylons(self)
         await protoss_action.build_gateways(self)
@@ -118,7 +184,8 @@ class CompetitiveBot(BotAI):
         await protoss_action.build_dark_shrine(self)
         await protoss_action.expand(self)
 
-        print(self.units().amount)
+        #print(len(self.unit_tab1))
+
 
         if self.time > 240.0:
             self.isTime = True
@@ -128,39 +195,28 @@ class CompetitiveBot(BotAI):
 
         await actions.intel(self, HEADLESS)
         if self.time > self.do_something_after:
-            self.do_something_after = self.time + random.uniform(5, 15)
+            self.do_something_after = self.time + random.uniform(4, 10)
             await self.do_something()
+
+        await self.predictReward()
 
         pass
 
     async def do_something(self):
-        '''if self.use_model:
-            prediction = self.model.predict([self.flipped.reshape([-1, 176, 200, 3])])
-            choice = np.argmax(prediction[0])
-        else:
-            choice = random.randint(0, 7)
-            print(choice)
-
-        try:
-            await self.choices[choice](self)
-        except Exception as e:
-            print(str(e))
-
-        y = np.zeros(8)
-        y[choice] = 1
-        self.train_data.append([y, self.flipped]) '''
-
-        ALLY_AMOUNT = self.units().amount
-        BUILDING_AMOUNT = self.structures().amount
-        NEXUS_AMOUNT = self.structures(UnitTypeId.NEXUS).amount
-        ALL_AMOUNT = self.all_units().amount
-        ENEMY_AMOUNT = self.all_units().enemy.not_structure.ready.amount
-        ENEMY_BUILDING = self.all_units().enemy.ready.amount - self.all_units().enemy.not_structure.ready.amount
-        ENEMY_NEXUS = self.all_units(UnitTypeId.NEXUS).amount
-
         #print(ENEMY_BUILDING)
 
-        episode_reward = 0
+        state = str(await self.getState())
+        action = await self.QTable.chooseAction(state)
+        await self.choices[action](self)
+        actionString = self.choicesQLearn[action]
+        if self.previous_action is not None:
+            await self.QTable.learn(self.previous_state, self.previous_action, self.reward, state)
+        self.previous_state = state
+        self.previous_action = actionString
+
+        self.reward = 0
+
+        '''episode_reward = 0
         if np.random.random() > epsilon:
             #action = np.argmax(q_table[obs])
             action = np.random.randint(0, 7)
@@ -171,20 +227,23 @@ class CompetitiveBot(BotAI):
         max_future_q = np.max(self.q_table[action])
         current_q = self.q_table[action]
 
-        await self.predictReward()
-
         if self.reward == win:
             new_q = win
         else:
             new_q = (1 - learning_rate) * current_q + learning_rate * (self.reward + discount * max_future_q)
         self.q_table[action] = new_q
 
-        episode_reward += self.reward
+        episode_reward += self.reward'''
 
     async def getUnits(self):
         for unitTag in self.all_units().ready:
-            if unitTag not in self.unit_tab:
+            if unitTag not in self.unit_tab and unitTag not in self.all_units(UnitTypeId.PROBE) and (unitTag.is_mine or unitTag.is_enemy):
                 self.unit_tab.append(unitTag)
+
+        self.unit_tab1.clear()
+        for unitTag1 in self.all_units().ready:
+            if unitTag1 not in self.all_units(UnitTypeId.PROBE) and (unitTag1.is_mine or unitTag1.is_enemy):
+                self.unit_tab1.append(unitTag1)
 
         #print(len(self.units()))
         #print(len(self.enemy_structures()))
@@ -195,40 +254,88 @@ class CompetitiveBot(BotAI):
         #building_table1 = [build.tag for build in self.enemy_structures()]
 
     async def predictReward(self):
-        self.reward = 0
 
-        await self.getUnits()
-        for unit in self.unit_tab:
-            if unit not in self.all_units().ready:
-                if unit.is_mine:
-                    if unit.is_structure:
-                        if unit in self.structures(UnitTypeId.NEXUS):
+        #print(len(self.unit_tab), "   ", len(self.unit_tab1))
+        #print(self.units()[3].name)
+        for u in self.unit_tab:
+            if u not in self.unit_tab1:
+                if u.is_mine:
+                    if u.is_structure:
+                        if u.name == "Nexus":
                             self.reward += ally_nexus
-                            self.unit_tab.remove(unit)
-                            #print('Ally nexus')
+                            self.unit_tab.remove(u)
+                            print('Ally nexus')
                         else:
                             self.reward += ally_building
-                            self.unit_tab.remove(unit)
-                            #print('Ally building')
+                            self.unit_tab.remove(u)
+                            print('Ally building')
                     else:
                         self.reward += ally_killed
-                        self.unit_tab.remove(unit)
-                        #print('Ally killed')
+                        self.unit_tab.remove(u)
+                        print('Ally killed')
                 else:
-                    if unit.is_structure:
-                        if unit in self.structures(UnitTypeId.NEXUS):
-                            self.reward += enemy_nexus
-                            self.unit_tab.remove(unit)
-                            #print('Enemy nexus')
+                    if u.is_visible:
+                        if u.is_structure:
+                            if u.name == "Nexus":
+                                self.reward += enemy_nexus
+                                self.unit_tab.remove(u)
+                                print('Enemy nexus')
+                            else:
+                                self.reward += enemy_building
+                                self.unit_tab.remove(u)
+                                print('Enemy building')
                         else:
-                            self.reward += enemy_building
-                            self.unit_tab.remove(unit)
-                            #print('Enemy building')
-                    else:
-                        self.reward += enemy_killed
-                        self.unit_tab.remove(unit)
-                        #print('Enemy killed')
+                            self.reward += enemy_killed
+                            self.unit_tab.remove(u)
+                            print('Enemy killed')
 
         self.reward += move_penalty
         #print(reward)
+
+    async def getState(self):
+        enemyCount = 0
+        allyCount = 0
+        enemyattack = 0
+        enemybuild = 0
+        center = False
+        left = False
+        right = False
+
+        for u in self.unit_tab:
+            if not u.is_structure:
+                if u.is_mine:
+                    allyCount += 1
+                else:
+                    if self.enemy_units().closer_than(75, self.start_location).amount > 0:
+                        enemyattack += 1
+                    enemyCount += 1
+            else:
+                if u.is_enemy or u.is_snapshot:
+                    enemybuild +=1
+
+        if self.units().closer_than(10, position.Point2(
+                position.Pointlike((self.game_info.map_center.x, self.game_info.map_center.y)))).amount > 0:
+            center = True
+        else:
+            center = False
+        if self.units().closer_than(10, position.Point2(position.Pointlike((
+                                                                           self.game_info.map_center.x - self.game_info.map_size.x / 4,
+                                                                           self.game_info.map_center.y - self.game_info.map_size.y / 4)))).amount > 0:
+            left = True
+        else:
+            left = False
+        if self.units().closer_than(10, position.Point2(position.Pointlike((
+                                                                           self.game_info.map_center.x + self.game_info.map_size.x / 4,
+                                                                           self.game_info.map_center.y + self.game_info.map_size.y / 4)))).amount > 0:
+            right = True
+        else:
+            right = False
+
+        return (enemyCount,
+                allyCount,
+                enemyattack,
+                enemybuild,
+                center,
+                left,
+                right)
 
