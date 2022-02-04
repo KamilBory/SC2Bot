@@ -78,11 +78,12 @@ async def intel(self, HEADLESS):
         cv2.waitKey(1)
 
 async def defend_nexus(self):
-    nexus = self.townhalls.ready.random
-    if len(self.enemy_units) > 0:
-        target = self.enemy_units.closest_to(nexus)
-        for u in self.units().idle:
-            u.attack(target)
+    if self.townhalls.ready.amount > 0:
+        nexus = self.townhalls.ready.random
+        if len(self.enemy_units) > 0:
+            target = self.enemy_units.closest_to(nexus)
+            for u in self.units().idle:
+                u.attack(target)
 
 
 async def attack_known_enemy_structure(self):
@@ -147,6 +148,9 @@ async def move_towards_map_side_left(self):
 async def move_towards_map_side_right(self):
     pos = position.Point2(position.Pointlike((self.game_info.map_center.x + self.game_info.map_size.x / 4, self.game_info.map_center.y +  self.game_info.map_size.y / 4)))
     await helper_function(self, pos)
+
+async def do_nothing(self):
+    print("StandDown")
 
 async def helper_function(self, pos):
     for u in self.units(UnitTypeId.ZEALOT):

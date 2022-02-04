@@ -15,10 +15,38 @@ import random
 async def build_pylons(self):
     if self.townhalls.ready.amount > 0:
         nexus = self.townhalls.ready.random
-        x = random.uniform(-1, 2) * self.enemy_start_locations[0][0]
-        y = random.uniform(-1, 2) * self.enemy_start_locations[0][1]
-        build_pos = position.Point2(position.Pointlike((x,y)))
-        pos = nexus.position.towards(build_pos, random.uniform(8, 15))
+        if self.structures(UnitTypeId.PYLON).amount == 0:
+            if nexus.position.x < 60.0:
+                x = nexus.position.x + 50.0
+                y = nexus.position.y
+            else:
+                x = nexus.position.x - 50.0
+                y = nexus.position.y
+            build_pos = position.Point2(position.Pointlike((x, y)))
+            pos = nexus.position.towards(build_pos, random.uniform(8, 12))
+        elif self.structures(UnitTypeId.PYLON).amount == 1:
+            if nexus.position.x < 60.0:
+                x = nexus.position.x
+                y = nexus.position.y - 50.0
+            else:
+                x = nexus.position.x
+                y = nexus.position.y + 50.0
+            build_pos = position.Point2(position.Pointlike((x, y)))
+            pos = nexus.position.towards(build_pos, random.uniform(8, 12))
+        elif self.structures(UnitTypeId.PYLON).amount == 2:
+            if nexus.position.x < 60.0:
+                x = nexus.position.x + 50.0
+                y = nexus.position.y - 50.0
+            else:
+                x = nexus.position.x - 50.0
+                y = nexus.position.y + 50.0
+            build_pos = position.Point2(position.Pointlike((x, y)))
+            pos = nexus.position.towards(build_pos, random.uniform(8, 12))
+        else:
+            x = random.uniform(-1, 2) * self.enemy_start_locations[0][0]
+            y = random.uniform(-1, 2) * self.enemy_start_locations[0][1]
+            build_pos = position.Point2(position.Pointlike((x,y)))
+            pos = nexus.position.towards(build_pos, random.uniform(8, 15))
         if (self.supply_left < 4
                 and self.already_pending(UnitTypeId.PYLON) == 0
                 and self.can_afford(UnitTypeId.PYLON)):
@@ -379,44 +407,31 @@ async def recruit_from_gateway(self):
 
 async def recruit_from_stargate(self):
     for i in range(self.structures(UnitTypeId.STARGATE).amount):
-        c = random.randint(0, 5)
+        c = random.randint(0, 4)
         if c == 0:
             await train_phoenix(self)
         elif c == 1:
-            await train_oracle(self)
-        elif c == 2:
             await train_void_ray(self)
-        elif c == 3:
+        elif c == 2:
             await train_tempest(self)
-        elif c == 4:
+        elif c == 3:
             await train_carrier(self)
-        elif c == 5:
+        elif c == 4:
             await train_mothership(self)
 
 async def recruit_from_roboticsfacility(self):
     for i in range(self.structures(UnitTypeId.ROBOTICSFACILITY).amount):
-        c = random.randint(0, 4)
+        c = random.randint(0, 3)
         if c == 0:
             await train_observer(self)
         elif c == 1:
-            await train_warp_prism(self)
-        elif c == 2:
             await train_immortal(self)
-        elif c == 3:
+        elif c == 2:
             await train_colossus(self)
-        elif c == 4:
+        elif c == 3:
             await train_disruptor(self)
 
-async def recruit(self, isTime):
-    if isTime:
-        await recruit_from_gateway(self)
-        await recruit_from_stargate(self)
-        await recruit_from_roboticsfacility(self)
-    else:
-        c = random.randint(0, 2)
-        if c == 0:
-            await recruit_from_gateway(self)
-        elif c == 1:
-            await recruit_from_stargate(self)
-        elif c == 2:
-            await recruit_from_roboticsfacility(self)
+async def recruit(self):
+    await recruit_from_gateway(self)
+    await recruit_from_stargate(self)
+    await recruit_from_roboticsfacility(self)

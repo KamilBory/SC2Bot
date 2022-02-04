@@ -1,5 +1,5 @@
 import sc2
-from sc2 import BotAI, run_game, maps, Race, Difficulty, position, Result
+from sc2 import BotAI, run_game, maps, Race, Difficulty, position, Result, game_state
 from sc2.ids.unit_typeid import UnitTypeId
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.upgrade_id import UpgradeId
@@ -7,6 +7,7 @@ from sc2.unit import Unit
 from sc2.units import Units
 from sc2.position import Point2
 from sc2.player import Bot, Computer
+from sc2.game_state import GameState
 import random
 import numpy as np
 import cv2
@@ -19,11 +20,11 @@ from bot import actions
 HEADLESS = False
 
 move_penalty = -1
-enemy_killed = 5
+enemy_killed = 15
 enemy_building = 10
 enemy_nexus = 25
 win = 200
-ally_killed = -10
+ally_killed = -5
 ally_building = -15
 ally_nexus = -20
 loss = -300
@@ -73,6 +74,8 @@ class QLearningTable:
             act = 6
         elif action == "move_towards_map_side_left":
             act = 7
+        elif action == "do_nothing":
+            act = 8
 
         return act
 
@@ -116,6 +119,12 @@ class CompetitiveBot(BotAI):
         self.isTime = False
         self.previous_action = None
         self.previous_state = None
+        self.kill_count_ally = 0
+        self.kill_count_enemy = 0
+        self.kill_count_ally_structure = 0
+        self.kill_count_enemy_structure = 0
+        self.kill_count_ally_nexus = 0
+        self.kill_count_enemy_nexus = 0
 
         self.choices = {0: actions.attack_known_enemy_unit,
                         1: actions.attack_known_enemy_structure,
@@ -125,6 +134,7 @@ class CompetitiveBot(BotAI):
                         5: actions.move_towards_map_center,
                         6: actions.move_towards_map_side_right,
                         7: actions.move_towards_map_side_left,
+                        8: actions.do_nothing,
                         }
 
         self.choicesQLearn = ["attack_known_enemy_unit",
@@ -134,7 +144,8 @@ class CompetitiveBot(BotAI):
                               "move_towards_enemy",
                               "move_towards_map_center",
                               "move_towards_map_side_right",
-                              "move_towards_map_side_left"
+                              "move_towards_map_side_left",
+                              "do_nothing"
                               ]
 
         self.reward = 0
@@ -160,6 +171,17 @@ class CompetitiveBot(BotAI):
 
         if game_result == Result.Victory:
             np.save("train_data/{}.npy".format(str(int(time.time()))), np.array(self.train_data))
+            stringFile = "VICTORY ALLIES " + str(self.kill_count_ally) + " " + str(
+                self.kill_count_ally_structure) + " " + str(self.kill_count_ally_nexus) + " "
+            stringFile += "ENEMIES " + str(self.kill_count_enemy) + " " + str(
+                self.kill_count_enemy_structure) + " " + str(self.kill_count_enemy_nexus) + " " + str(self.time) + "\n"
+            with open("VICTORY.txt", "a+") as file:
+                file.write(stringFile)
+        else:
+            stringFile = "DEFEAT ALLIES " + str(self.kill_count_ally)  + " " + str(self.kill_count_ally_structure) + " " + str(self.kill_count_ally_nexus) + " "
+            stringFile += "ENEMIES " + str(self.kill_count_enemy)  + " " + str(self.kill_count_enemy_structure) + " " + str(self.kill_count_enemy_nexus) + " " + str(self.time) + "\n"
+            with open("VICTORY.txt", "a+") as file:
+                file.write(stringFile)
 
     async def on_step(self, iteration):
         # Populate this function with whatever your bot should do!
@@ -187,18 +209,18 @@ class CompetitiveBot(BotAI):
         #print(len(self.unit_tab1))
 
 
-        if self.time > 240.0:
+        if self.time > 180.0:
             self.isTime = True
 
         if self.time % 15 == 0:
-            await protoss_action.recruit(self, self.isTime)
+            await protoss_action.recruit(self)
 
         await actions.intel(self, HEADLESS)
         if self.time > self.do_something_after:
             self.do_something_after = self.time + random.uniform(4, 10)
             await self.do_something()
 
-        await self.predictReward()
+        #await self.predictRewardV2()
 
         pass
 
@@ -215,25 +237,6 @@ class CompetitiveBot(BotAI):
         self.previous_action = actionString
 
         self.reward = 0
-
-        '''episode_reward = 0
-        if np.random.random() > epsilon:
-            #action = np.argmax(q_table[obs])
-            action = np.random.randint(0, 7)
-        else:
-            action = np.random.randint(0, 7)
-        await self.choices[action](self)
-
-        max_future_q = np.max(self.q_table[action])
-        current_q = self.q_table[action]
-
-        if self.reward == win:
-            new_q = win
-        else:
-            new_q = (1 - learning_rate) * current_q + learning_rate * (self.reward + discount * max_future_q)
-        self.q_table[action] = new_q
-
-        episode_reward += self.reward'''
 
     async def getUnits(self):
         for unitTag in self.all_units().ready:
@@ -264,30 +267,124 @@ class CompetitiveBot(BotAI):
                         if u.name == "Nexus":
                             self.reward += ally_nexus
                             self.unit_tab.remove(u)
-                            print('Ally nexus')
+                            #print('Ally nexus')
+                            self.kill_count_ally_nexus += 1
                         else:
                             self.reward += ally_building
                             self.unit_tab.remove(u)
-                            print('Ally building')
+                            #print('Ally building')
+                            self.kill_count_ally_structure += 1
                     else:
                         self.reward += ally_killed
                         self.unit_tab.remove(u)
-                        print('Ally killed')
+                        self.kill_count_ally += 1
+                        #print('Ally killed')
+                else:
+                    if u.is_structure:
+                        if u.name == "Command Center" or u.name == "Orbital Command" or u.name == "Planetary Fortress":
+                            self.reward += enemy_nexus
+                            self.unit_tab.remove(u)
+                            self.kill_count_enemy_nexus += 1
+                            #print('Enemy nexus')
+                        else:
+                            self.reward += enemy_building
+                            self.unit_tab.remove(u)
+                            self.kill_count_enemy_structure += 1
+                            #print('Enemy building')
+                    else:
+                        self.reward += enemy_killed
+                        self.unit_tab.remove(u)
+                        self.kill_count_enemy += 1
+                        #print('Enemy killed')
+
+        self.reward += move_penalty
+        #print(reward)
+
+    async def on_unit_destroyed(self, unit_tag: int):
+        for u in self.unit_tab:
+            if u.tag == unit_tag:
+                if u.is_mine:
+                    if u.is_structure:
+                        if u.name == "Nexus":
+                            self.reward += ally_nexus
+                            self.unit_tab.remove(u)
+                            #print('Ally nexus')
+                            self.kill_count_ally_nexus += 1
+                        else:
+                            self.reward += ally_building
+                            self.unit_tab.remove(u)
+                            #print('Ally building')
+                            self.kill_count_ally_structure += 1
+                    else:
+                        self.reward += ally_killed
+                        self.unit_tab.remove(u)
+                        self.kill_count_ally += 1
+                        #print('Ally killed')
+                else:
+                    if u.is_visible:
+                        if u.is_structure:
+                            if u.name == "CommandCenter" or u.name == "OrbitalCommand" or u.name == "PlanetaryFortress":
+                                self.reward += enemy_nexus
+                                self.unit_tab.remove(u)
+                                self.kill_count_enemy_nexus += 1
+                                #print('Enemy nexus')
+                            else:
+                                self.reward += enemy_building
+                                self.unit_tab.remove(u)
+                                self.kill_count_enemy_structure += 1
+                                #print('Enemy building')
+                        else:
+                            self.reward += enemy_killed
+                            self.unit_tab.remove(u)
+                            self.kill_count_enemy += 1
+                            #print('Enemy killed')
+
+        self.reward += move_penalty
+        #print(reward)
+
+
+    async def predictRewardV2(self):
+
+        #print(len(self.unit_tab), "   ", len(self.unit_tab1))
+        #print(self.units()[3].name)
+
+        for u in self.unit_tab:
+            if u.tag in gInfo.dead_units:
+                if u.is_mine:
+                    if u.is_structure:
+                        if u.name == "Nexus":
+                            self.reward += ally_nexus
+                            self.unit_tab.remove(u)
+                            #print('Ally nexus')
+                            self.kill_count_ally_nexus += 1
+                        else:
+                            self.reward += ally_building
+                            self.unit_tab.remove(u)
+                            #print('Ally building')
+                            self.kill_count_ally_structure += 1
+                    else:
+                        self.reward += ally_killed
+                        self.unit_tab.remove(u)
+                        self.kill_count_ally += 1
+                        #print('Ally killed')
                 else:
                     if u.is_visible:
                         if u.is_structure:
                             if u.name == "Nexus":
                                 self.reward += enemy_nexus
                                 self.unit_tab.remove(u)
-                                print('Enemy nexus')
+                                self.kill_count_enemy_nexus += 1
+                                #print('Enemy nexus')
                             else:
                                 self.reward += enemy_building
                                 self.unit_tab.remove(u)
-                                print('Enemy building')
+                                self.kill_count_enemy_structure += 1
+                                #print('Enemy building')
                         else:
                             self.reward += enemy_killed
                             self.unit_tab.remove(u)
-                            print('Enemy killed')
+                            self.kill_count_enemy += 1
+                            #print('Enemy killed')
 
         self.reward += move_penalty
         #print(reward)

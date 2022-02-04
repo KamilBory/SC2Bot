@@ -112,25 +112,26 @@ def load_bot(args):
 
 
 def run():
-    args = parse_arguments()
+    for i in range(0, 250):
+        args = parse_arguments()
 
-    bot = load_bot(args)
+        bot = load_bot(args)
 
-    # The presence of a LadderServer argument indicates that this is a ladder game
-    if args.LadderServer:
-        # Ladder game started by LadderManager
-        print("Starting ladder game...")
-        result, opponentid = run_ladder_game(args, bot)
-        print(result, " against opponent ", opponentid)
-    else:
-        # Local game
-        print("Starting local game...")
-        sc2.run_game(sc2.maps.get(args.Map),
-                     [bot, Computer(Race[args.ComputerRace], Difficulty[args.ComputerDifficulty])],
-                     realtime=args.Realtime,
-                     sc2_version=args.Sc2Version,
-                     #disable_fog=True,
-                     )
+        # The presence of a LadderServer argument indicates that this is a ladder game
+        if args.LadderServer:
+            # Ladder game started by LadderManager
+            print("Starting ladder game...")
+            result, opponentid = run_ladder_game(args, bot)
+            print(result, " against opponent ", opponentid)
+        else:
+            # Local game
+            print("Starting local game...")
+            sc2.run_game(sc2.maps.get(args.Map),
+                         [bot, Computer(Race[args.ComputerRace], Difficulty[args.ComputerDifficulty])],
+                         realtime=args.Realtime,
+                         sc2_version=args.Sc2Version,
+                         #disable_fog=True,
+                         )
 
 
 # Start game
